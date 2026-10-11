@@ -91,6 +91,17 @@ static const float g_purge_volume_one_time = 135.f;
 static const int g_max_flush_count = 4;
 static const size_t g_max_label_object = 64;
 
+// Orca: value of the initial_no_support_hotend / current_hotend / next_hotend placeholders used by
+// upstream-ported BBL machine G-code (e.g. X2D). Ported from upstream OrcaSlicer's
+// hotend_id_for_gcode_placeholder(); this fork has no dynamic nozzle map (Filament Track Switch), so a
+// BBL printer always gets -1: Bambu firmware reads an explicit hotend index as a request for the
+// Filament Track Switch and rejects the job on a printer without one. Any other printer gets the
+// filament's extruder index.
+static int hotend_id_for_gcode_placeholder(bool is_bbl_printer, int extruder_id)
+{
+    return is_bbl_printer ? -1 : extruder_id;
+}
+
 Vec2d travel_point_1;
 Vec2d travel_point_2;
 Vec2d travel_point_3;
@@ -832,6 +843,8 @@ static std::vector<Vec2d> get_path_of_change_filament(const Print& print)
 
             config.set_key_value("previous_extruder", new ConfigOptionInt(old_filament_id));
             config.set_key_value("next_extruder", new ConfigOptionInt(new_filament_id));
+            config.set_key_value("current_hotend", new ConfigOptionInt(hotend_id_for_gcode_placeholder(gcodegen.m_print->is_BBL_printer(), old_extruder_id)));
+            config.set_key_value("next_hotend", new ConfigOptionInt(hotend_id_for_gcode_placeholder(gcodegen.m_print->is_BBL_printer(), (int)gcodegen.get_extruder_id(new_filament_id))));
             config.set_key_value("layer_num", new ConfigOptionInt(gcodegen.m_layer_index));
             config.set_key_value("layer_z", new ConfigOptionFloat(tcr.print_z));
             config.set_key_value("toolchange_z", new ConfigOptionFloat(z));
@@ -1029,6 +1042,7 @@ static std::vector<Vec2d> get_path_of_change_filament(const Print& print)
         check_add_eol(toolchange_unretract_str);
 
         gcodegen.placeholder_parser().set("current_extruder", new_filament_id);
+        gcodegen.placeholder_parser().set("current_hotend", hotend_id_for_gcode_placeholder(gcodegen.m_print->is_BBL_printer(), (int)gcodegen.get_extruder_id(new_filament_id)));
         gcodegen.placeholder_parser().set("retraction_distance_when_cut", gcodegen.m_config.retraction_distances_when_cut.get_at(new_filament_id));
         gcodegen.placeholder_parser().set("long_retraction_when_cut", gcodegen.m_config.long_retractions_when_cut.get_at(new_filament_id));
         gcodegen.placeholder_parser().set("retraction_distance_when_ec", gcodegen.m_config.retraction_distances_when_ec.get_at(new_filament_id));
@@ -2886,7 +2900,9 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
     this->placeholder_parser().set("first_non_support_filaments", new ConfigOptionInts(first_non_support_filaments));
     this->placeholder_parser().set("initial_no_support_tool", initial_non_support_extruder_id);
     this->placeholder_parser().set("initial_no_support_extruder", initial_non_support_extruder_id);
+    this->placeholder_parser().set("initial_no_support_hotend", hotend_id_for_gcode_placeholder(is_bbl_printers, (int)get_extruder_id(initial_non_support_extruder_id)));
     this->placeholder_parser().set("current_extruder", initial_extruder_id);
+    this->placeholder_parser().set("current_hotend", hotend_id_for_gcode_placeholder(is_bbl_printers, (int)get_extruder_id(initial_extruder_id)));
     //Orca: set the key for compatibilty
     this->placeholder_parser().set("retraction_distance_when_cut", m_config.retraction_distances_when_cut.get_at(initial_extruder_id));
     this->placeholder_parser().set("long_retraction_when_cut", m_config.long_retractions_when_cut.get_at(initial_extruder_id));
@@ -2902,6 +2918,11 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
 
     this->placeholder_parser().set("max_additional_fan", max_additional_fan);
     this->placeholder_parser().set("first_x_layer_fan_speed", 0); // TODO: Orca hack to support BBL profiles
+    // Orca: upstream OrcaSlicer defaults for settings this fork lacks but upstream-ported BBL
+    // machine G-code (e.g. X2D layer change / filament change) references per extruder.
+    this->placeholder_parser().set("close_additional_fan_first_x_layers", new ConfigOptionInts({ 1 }));
+    this->placeholder_parser().set("additional_fan_full_speed_layer", new ConfigOptionInts({ 0 }));
+    this->placeholder_parser().set("filament_cooling_before_tower", new ConfigOptionFloats({ 10. }));
 
     auto flush_v_speed = m_config.filament_flush_volumetric_speed.values;
     auto flush_temps = m_config.filament_flush_temp.values;
@@ -7708,6 +7729,7 @@ std::string GCode::set_extruder(unsigned int new_filament_id, double print_z, bo
     // if we are running a single-extruder setup, just set the extruder and return nothing
     if (!m_writer.multiple_extruders) {
         this->placeholder_parser().set("current_extruder", new_filament_id);
+        this->placeholder_parser().set("current_hotend", hotend_id_for_gcode_placeholder(m_print->is_BBL_printer(), new_extruder_id));
         this->placeholder_parser().set("retraction_distance_when_ec", m_config.retraction_distances_when_ec.get_at(new_filament_id));
         this->placeholder_parser().set("long_retraction_when_ec", m_config.long_retractions_when_ec.get_at(new_filament_id));
 
@@ -7852,6 +7874,8 @@ std::string GCode::set_extruder(unsigned int new_filament_id, double print_z, bo
     dyn_config.set_key_value("outer_wall_volumetric_speed", new ConfigOptionFloat(outer_wall_volumetric_speed));
     dyn_config.set_key_value("previous_extruder", new ConfigOptionInt(old_filament_id));
     dyn_config.set_key_value("next_extruder", new ConfigOptionInt((int)new_filament_id));
+    dyn_config.set_key_value("current_hotend", new ConfigOptionInt(hotend_id_for_gcode_placeholder(m_print->is_BBL_printer(), old_filament_id >= 0 ? (int)get_extruder_id(old_filament_id) : -1)));
+    dyn_config.set_key_value("next_hotend", new ConfigOptionInt(hotend_id_for_gcode_placeholder(m_print->is_BBL_printer(), new_extruder_id)));
     dyn_config.set_key_value("layer_num", new ConfigOptionInt(m_layer_index));
     dyn_config.set_key_value("layer_z", new ConfigOptionFloat(print_z));
     dyn_config.set_key_value("max_layer_z", new ConfigOptionFloat(m_max_layer_z));
@@ -7987,6 +8011,7 @@ std::string GCode::set_extruder(unsigned int new_filament_id, double print_z, bo
     }
 
     this->placeholder_parser().set("current_extruder", new_filament_id);
+    this->placeholder_parser().set("current_hotend", hotend_id_for_gcode_placeholder(m_print->is_BBL_printer(), new_extruder_id));
     this->placeholder_parser().set("retraction_distance_when_cut", m_config.retraction_distances_when_cut.get_at(new_filament_id));
     this->placeholder_parser().set("long_retraction_when_cut", m_config.long_retractions_when_cut.get_at(new_filament_id));
     this->placeholder_parser().set("retraction_distance_when_ec", m_config.retraction_distances_when_ec.get_at(new_filament_id));
