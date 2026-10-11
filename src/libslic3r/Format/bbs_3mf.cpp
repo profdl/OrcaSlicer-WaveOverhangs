@@ -182,6 +182,12 @@ const std::string BBL_PROFILE_COVER_TAG             = "ProfileCover";
 const std::string BBL_PROFILE_DESCRIPTION_TAG       = "ProfileDescription";
 const std::string BBL_PROFILE_USER_ID_TAG           = "ProfileUserId";
 const std::string BBL_PROFILE_USER_NAME_TAG         = "ProfileUserName";
+// Orca: version written as X-BBL-Client-Version in Metadata/slice_info.config. Bambu firmware (e.g. X2D)
+// rejects a .gcode.3mf whose client version is blank, which is what convert_to_full_version() returns
+// for SoftFever_VERSION ("2.4.0-dev" is not a four-part version). SLIC3R_VERSION can't be used either:
+// this fork keeps it at 01.10.01.50 for preset compatibility. Report the BBS-compatible version that
+// upstream OrcaSlicer writes here (its SLIC3R_VERSION).
+const std::string BBL_SLICE_INFO_CLIENT_VERSION     = "02.08.01.55";
 
 const std::string MODEL_FOLDER = "3D/";
 const std::string MODEL_EXTENSION = ".model";
@@ -7930,7 +7936,7 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
         // save slice header for debug
         stream << "  <" << SLICE_HEADER_TAG << ">\n";
         stream << "    <" << SLICE_HEADER_ITEM_TAG << " " << KEY_ATTR << "=\"" << "X-BBL-Client-Type"    << "\" " << VALUE_ATTR << "=\"" << "slicer" << "\"/>\n";
-        stream << "    <" << SLICE_HEADER_ITEM_TAG << " " << KEY_ATTR << "=\"" << "X-BBL-Client-Version" << "\" " << VALUE_ATTR << "=\"" << convert_to_full_version(SoftFever_VERSION) << "\"/>\n";
+        stream << "    <" << SLICE_HEADER_ITEM_TAG << " " << KEY_ATTR << "=\"" << "X-BBL-Client-Version" << "\" " << VALUE_ATTR << "=\"" << convert_to_full_version(BBL_SLICE_INFO_CLIENT_VERSION) << "\"/>\n";
         stream << "  </" << SLICE_HEADER_TAG << ">\n";
 
         for (unsigned int i = 0; i < (unsigned int)plate_data_list.size(); ++i)
