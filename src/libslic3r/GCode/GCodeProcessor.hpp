@@ -73,6 +73,9 @@ class Print;
         std::map<size_t, double>                            total_volumes_per_extruder;
         //BBS: the flush amount of every filament
         std::map<size_t, double>                            flush_per_filament;
+        // BBS: load / unload time spent on every filament, written to slice_info.config
+        std::map<size_t, double>                            load_time_per_filament;
+        std::map<size_t, double>                            unload_time_per_filament;
         std::map<ExtrusionRole, std::pair<double, double>>  used_filaments_per_role;
 
         std::array<Mode, static_cast<size_t>(ETimeMode::Count)> modes;
@@ -92,6 +95,8 @@ class Print;
             support_volumes_per_extruder.clear();
             total_volumes_per_extruder.clear();
             flush_per_filament.clear();
+            load_time_per_filament.clear();
+            unload_time_per_filament.clear();
             used_filaments_per_role.clear();
             total_filament_changes = 0;
             total_extruder_changes = 0;
@@ -249,6 +254,10 @@ class Print;
         std::unordered_map<std::vector<unsigned int>, std::vector<std::pair<int, int>>,FilamentSequenceHash> layer_filaments;
         // first key stores `from` filament, second keys stores the `to` filament
         std::map<std::pair<int,int>, int > filament_change_count_map;
+        // BBS: written to Metadata/filament_sequence.json
+        std::vector<unsigned int> nozzle_change_sequence;
+        std::vector<unsigned int> filament_change_sequence;
+        std::vector<int> optimal_assignment;
 
         BedType bed_type = BedType::btCount;
         void reset();
@@ -285,6 +294,9 @@ class Print;
             filament_printable_reuslt = other.filament_printable_reuslt;
             layer_filaments = other.layer_filaments;
             filament_change_count_map = other.filament_change_count_map;
+            nozzle_change_sequence = other.nozzle_change_sequence;
+            filament_change_sequence = other.filament_change_sequence;
+            optimal_assignment = other.optimal_assignment;
             initial_layer_time = other.initial_layer_time;
 #if ENABLE_GCODE_VIEWER_STATISTICS
             time = other.time;

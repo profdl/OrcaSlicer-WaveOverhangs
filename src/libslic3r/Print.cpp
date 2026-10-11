@@ -3045,6 +3045,35 @@ bool Print::has_wipe_tower() const
     return false;
 }
 
+// BBS: ported from Bambu Studio, written to slice_info.config. True when an object's support (or
+// support interface) filament differs from its body filaments, so support material goes through the
+// wipe tower.
+bool Print::support_material_on_wipe_tower() const
+{
+    if (!this->has_wipe_tower() || !this->has_support_material())
+        return false;
+
+    for (const PrintObject *object : m_objects) {
+        if (!object->has_support_material())
+            continue;
+
+        const std::vector<unsigned int> obj_filaments = object->object_extruders();
+        const int                       support_fil   = object->config().support_filament;
+        const int                       support_interface_fil = object->config().support_interface_filament;
+
+        auto support_differs_from_body = [&](int filament_1based) -> bool {
+            if (filament_1based <= 0)
+                return false;
+            const unsigned int filament_0based = static_cast<unsigned int>(filament_1based - 1);
+            return std::find(obj_filaments.begin(), obj_filaments.end(), filament_0based) == obj_filaments.end();
+        };
+
+        if (support_differs_from_body(support_fil) || support_differs_from_body(support_interface_fil))
+            return true;
+    }
+    return false;
+}
+
 const WipeTowerData &Print::wipe_tower_data(size_t filaments_cnt) const
 {
     // If the wipe tower wasn't created yet, make sure the depth and brim_width members are set to default.
